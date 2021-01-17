@@ -108,12 +108,8 @@ class SqliteFilterCompiler:
     NULLS = {'null'}
     EXISTS_OPS = {'exists'}
 
-    def __init__(self, path, root_id, filter_ast, schema):
-        self._path = path
-        self._root_id = root_id
-        self._filter_ast = filter_ast
+    def __init__(self, schema):
         self._schema = schema
-
         self._pivot_map = self._gen_pivot_map()
 
     def _validate_path(self, path):
@@ -138,21 +134,20 @@ class SqliteFilterCompiler:
                 pivot_map[(table_name, foreign_table)] = pivot_table_name
         return pivot_map
 
-    def compile(self):
-        if not self._validate_path(self._path):
-            raise Exception('Invalid path:', self._path)
-        p = self._path
-        selects = [f'{t}.id AS _{t}_id' for t in p[:-1]] + [f'{p[-1]}.*']
+    def compile(self, path, root_id, filter_ast):
+        if not self._validate_path(path):
+            raise Exception('Invalid path:', path)
+        selects = [f'{t}.id AS _{t}_id' for t in path[:-1]] + [f'{path[-1]}.*']
         wheres = []
         params = []
-        if self._root_id is not None:
-            wheres.append(f'{p[0]}.id = ?')
-            params.append(self._root_id)
-        if self._filter_ast is not None:
-            filter_where, filter_params = self._compile_filters()
+        if root_id is not None:
+            wheres.append(f'{path[0]}.id = ?')
+            params.append(root_id)
+        if filter_ast is not None:
+            filter_where, filter_params = self._compile_filters(path, filter_ast)
             wheres.append(filter_where)
             params += filter_params
-        return self._compile_sql_select(selects, self._path, wheres), params
+        return self._compile_sql_select(selects, path, wheres), params
 
     def _compile_sql_select(self, selects, path, wheres):
         froms = [path[0]]
@@ -172,8 +167,8 @@ class SqliteFilterCompiler:
 
         return f'SELECT {selects_sql} FROM {froms_sql} {joins_sql} {wheres_sql}'
 
-    def _compile_filters(self):
-        sql, params = self._compile_node(self._filter_ast, self._path)
+    def _compile_filters(self, path, filter_ast):
+        sql, params = self._compile_node(filter_ast, path)
         return sql, params
 
     def _compile_node(self, ast, path):

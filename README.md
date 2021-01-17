@@ -102,8 +102,8 @@ schema = {
     }
 }
 
-compiler = sqfl.SqliteFilterCompiler(['a'], 1, ast, schema)
-print(compiler.compile())
+compiler = sqfl.SqliteFilterCompiler(schema)
+print(compiler.compile(['a'], 1, ast))
 ```
 
 ## License
