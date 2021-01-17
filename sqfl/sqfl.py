@@ -149,9 +149,11 @@ class SqliteFilterCompiler:
             params += filter_params
         return self._compile_sql_select(selects, path, wheres), params
 
-    def _compile_sql_select(self, selects, path, wheres):
+    def _compile_sql_select(self, selects, path, wheres, pivot_table=None):
         froms = [path[0]]
         joins = []
+        if pivot_table is not None:
+            joins.append(f'JOIN {pivot_table} ON {froms[0]}.id = {pivot_table}.{froms[0]}_id')
         for table, parent_table in zip(path[1:], path[:-1]):
             pivot_table = self._pivot_map.get((table, parent_table))
             if pivot_table:
@@ -233,5 +235,5 @@ class SqliteFilterCompiler:
         filter_where, filter_params = self._compile_node(ast['expr'], parent_path + path)
         wheres.append(filter_where)
 
-        exists_sql = self._compile_sql_select(['*'], path, wheres)
+        exists_sql = self._compile_sql_select(['*'], path, wheres, pivot_table)
         return f'{ast["type"]} ({exists_sql})', filter_params
