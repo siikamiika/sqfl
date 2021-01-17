@@ -228,7 +228,7 @@ class SqliteFilterCompiler:
 
         pivot_table = self._pivot_map.get((parent_table, table))
         if pivot_table:
-            wheres = [f'{table}.id = {pivot_table}.{table}_id']
+            wheres = [f'{pivot_table}.{parent_table}_id = {parent_table}.id']
         else:
             wheres = [f'{table}.{parent_table}_id = {parent_table}.id']
 
