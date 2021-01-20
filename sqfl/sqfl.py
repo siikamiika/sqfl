@@ -206,7 +206,7 @@ class SqliteFilterCompiler:
             raise Exception('Invalid path:', path)
         if col not in self._schema[path[-1]]['columns']:
             raise Exception('Invalid column:', col)
-        if len(path) == 1:
+        if len(path) == 1 and parent_path[-1] == path[0]:
             return f'{path[0]}.{col}', []
         wheres, pivot_table = self._get_parent_details(path, parent_path)
         select_sql = self._compile_sql_select([f'{path[-1]}.{col}'], path, wheres, pivot_table)
