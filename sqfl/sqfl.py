@@ -200,26 +200,22 @@ class SqliteFilterCompiler:
     def _compile_var(self, ast, path):
         return '?', [ast['val']]
 
-    def _compile_ident(self, ast, path):
-        table, col = ast['name'].split('.')
-        if table not in self._schema:
-            raise Exception('Invalid table:', table)
-        if col not in self._schema[table]['columns']:
+    def _compile_ident(self, ast, parent_path):
+        *path, col = ast['name'].split('.')
+        if not self._validate_path(path):
+            raise Exception('Invalid path:', path)
+        if col not in self._schema[path[-1]]['columns']:
             raise Exception('Invalid column:', col)
-        return f'{table}.{col}', []
+        if len(path) == 1:
+            return f'{path[0]}.{col}', []
+        wheres, pivot_table = self._get_parent_details(path, parent_path)
+        select_sql = self._compile_sql_select([f'{path[-1]}.{col}'], path, wheres, pivot_table)
+        return f'({select_sql} LIMIT 1)', []
 
     def _compile_null(self, ast, path):
         return 'NULL', []
 
-    def _compile_exists(self, ast, parent_path):
-        # TODO maybe this shouldn't be a special case for generic ident
-        path_node = ast['path']
-        if path_node['type'] != 'ident':
-            raise Exception('Invalid path:', path_node)
-        path = path_node['name'].split('.')
-        if not self._validate_path(path):
-            raise Exception('Invalid path:', path)
-
+    def _get_parent_details(self, path, parent_path):
         # TODO exists from nested scope
         table = path[0]
         parent_table = parent_path[-1]
@@ -231,6 +227,18 @@ class SqliteFilterCompiler:
             wheres = [f'{pivot_table}.{parent_table}_id = {parent_table}.id']
         else:
             wheres = [f'{table}.{parent_table}_id = {parent_table}.id']
+        return wheres, pivot_table
+
+    def _compile_exists(self, ast, parent_path):
+        # TODO maybe this shouldn't be a special case for generic ident
+        path_node = ast['path']
+        if path_node['type'] != 'ident':
+            raise Exception('Invalid path:', path_node)
+        path = path_node['name'].split('.')
+        if not self._validate_path(path):
+            raise Exception('Invalid path:', path)
+
+        wheres, pivot_table = self._get_parent_details(path, parent_path)
 
         filter_where, filter_params = self._compile_node(ast['expr'], parent_path + path)
         wheres.append(filter_where)
