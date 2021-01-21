@@ -61,6 +61,7 @@ class SqliteFilterParser:
             term = fact (mul_op fact :: `_fy`)* :: `reduce` ;
             fact = un_op fact :: `fx` | atom ;
             fact = exists_op ident atom :: `lambda f, x, y: f(x, y)` ;
+            fact = ident '[' str ']' :: `lambda a, b: {'type': 'ident_assoc', 'ident': a, 'key': b}` ;
 
             atom = '(' expr ')' ;
             atom = real | int ;
@@ -105,6 +106,7 @@ class SqliteFilterCompiler:
     UNARY_OPS = {'-', '+', '~', 'not'}
     VARS = {'real', 'int', 'str'} # TODO explicit var
     IDENTS = {'ident'}
+    IDENT_ASSOCS = {'ident_assoc'}
     NULLS = {'null'}
     EXISTS_OPS = {'exists'}
 
@@ -182,6 +184,8 @@ class SqliteFilterCompiler:
             return self._compile_var(ast, path)
         if ast['type'] in SqliteFilterCompiler.IDENTS:
             return self._compile_ident(ast, path)
+        if ast['type'] in SqliteFilterCompiler.IDENT_ASSOCS:
+            return self._compile_ident_assoc(ast, path)
         if ast['type'] in SqliteFilterCompiler.NULLS:
             return self._compile_null(ast, path)
         if ast['type'] in SqliteFilterCompiler.EXISTS_OPS:
@@ -211,6 +215,19 @@ class SqliteFilterCompiler:
         wheres, pivot_table = self._get_parent_details(path, parent_path)
         select_sql = self._compile_sql_select([f'{path[-1]}.{col}'], path, wheres, pivot_table)
         return f'({select_sql} LIMIT 1)', []
+
+    def _compile_ident_assoc(self, ast, parent_path):
+        path = ast['ident']['name'].split('.')
+        if not self._validate_path(path):
+            raise Exception('Invalid path:', path)
+        if 'value' not in self._schema[path[-1]]['columns']:
+            raise Exception('Invalid column: [value]')
+        # TODO length issues?
+        wheres, pivot_table = self._get_parent_details(path, parent_path)
+        wheres.append(f'{path[-1]}.name = ?')
+        params = [ast['key']['val']]
+        select_sql = self._compile_sql_select([f'{path[-1]}.value'], path, wheres, pivot_table)
+        return f'({select_sql} LIMIT 1)', params
 
     def _compile_null(self, ast, path):
         return 'NULL', []
