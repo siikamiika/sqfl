@@ -136,17 +136,22 @@ class SqliteFilterCompiler:
                 pivot_map[(table_name, foreign_table)] = pivot_table_name
         return pivot_map
 
-    def compile(self, path, root_id, filter_ast):
+    def compile(self, path, root_id, filter_ast, select_asts=None):
         if not self._validate_path(path):
             raise Exception('Invalid path:', path)
-        selects = [f'{t}.id AS _{t}_id' for t in path[:-1]] + [f'{path[-1]}.*']
         wheres = []
         params = []
+        selects = [f'{t}.id AS _{t}_id' for t in path[:-1]] + [f'{path[-1]}.*']
+        if select_asts is not None:
+            for i, select_ast in enumerate(select_asts):
+                select_sql, select_params = self._compile_node(select_ast, path)
+                selects.append(f'{select_sql} AS select_{i}')
+                params += select_params
         if root_id is not None:
             wheres.append(f'{path[0]}.id = ?')
             params.append(root_id)
         if filter_ast is not None:
-            filter_where, filter_params = self._compile_filters(path, filter_ast)
+            filter_where, filter_params = self._compile_node(filter_ast, path)
             wheres.append(filter_where)
             params += filter_params
         return self._compile_sql_select(selects, path, wheres), params
@@ -170,10 +175,6 @@ class SqliteFilterCompiler:
         wheres_sql = '' if len(wheres) == 0 else 'WHERE ' + ' AND '.join(wheres)
 
         return f'SELECT {selects_sql} FROM {froms_sql} {joins_sql} {wheres_sql}'
-
-    def _compile_filters(self, path, filter_ast):
-        sql, params = self._compile_node(filter_ast, path)
-        return sql, params
 
     def _compile_node(self, ast, path):
         if ast['type'] in SqliteFilterCompiler.BINARY_OPS:
