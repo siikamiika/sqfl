@@ -136,7 +136,7 @@ class SqliteFilterCompiler:
                 pivot_map[(table_name, foreign_table)] = pivot_table_name
         return pivot_map
 
-    def compile(self, path, root_id, filter_ast, select_asts=None):
+    def compile(self, path, root_id, filter_ast=None, select_asts=None):
         if not self._validate_path(path):
             raise Exception('Invalid path:', path)
         wheres = []
