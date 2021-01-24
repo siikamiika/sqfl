@@ -62,6 +62,7 @@ class SqliteFilterParser:
             fact = un_op fact :: `fx` | atom ;
             fact = exists_op ident atom :: `lambda f, x, y: f(x, y)` ;
             fact = ident '[' str ']' :: `lambda a, b: {'type': 'ident_assoc', 'ident': a, 'key': b}` ;
+            fact = 'json_extract(' fact ',' str ')' :: `lambda a, b: {'type': 'json_extract', 'nodes': [a, b]}` ;
 
             atom = '(' expr ')' ;
             atom = real | int ;
@@ -109,6 +110,7 @@ class SqliteFilterCompiler:
     IDENT_ASSOCS = {'ident_assoc'}
     NULLS = {'null'}
     EXISTS_OPS = {'exists'}
+    FUNCTIONS = {'json_extract'}
 
     def __init__(self, schema):
         self._schema = schema
@@ -191,6 +193,8 @@ class SqliteFilterCompiler:
             return self._compile_null(ast, path)
         if ast['type'] in SqliteFilterCompiler.EXISTS_OPS:
             return self._compile_exists(ast, path)
+        if ast['type'] in SqliteFilterCompiler.FUNCTIONS:
+            return self._compile_function(ast, path)
         raise Exception('Unrecognized node:', ast['type'])
 
     def _compile_binary_op(self, ast, path):
@@ -263,3 +267,12 @@ class SqliteFilterCompiler:
 
         exists_sql = self._compile_sql_select(['*'], path, wheres, pivot_table)
         return f'{ast["type"]} ({exists_sql})', filter_params
+
+    def _compile_function(self, ast, parent_path):
+        sqls = []
+        params = []
+        for node_ast in ast['nodes']:
+            sql, params2 = self._compile_node(node_ast, parent_path)
+            sqls.append(sql)
+            params += params2
+        return f'{ast["type"]}({", ".join(sqls)})', params
